@@ -1,4 +1,3 @@
-```javascript
 const firebaseConfig = {
   apiKey: "SUA_KEY",
   authDomain: "SEU_AUTH",
