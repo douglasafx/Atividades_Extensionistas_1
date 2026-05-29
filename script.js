@@ -1,3 +1,5 @@
+const ADMIN_HASH = "#painel-resultados-unicive-douglas-2026";
+
 const firebaseConfig = {
   apiKey: "AIzaSyCtuFBEHrxMPbaBLDOsXMbTeTkRKBhwc_4",
   authDomain: "simulador-whatsapp-unicive.firebaseapp.com",
@@ -19,13 +21,11 @@ const scenarios = [
     avatar:"🛠️",
     sender:"Suporte WhatsApp",
     risk:"ALTO",
-    message:
-      "Detectamos um acesso suspeito em sua conta. Para confirmar sua identidade envie o código SMS recebido.",
-    explanation:
-      "Golpistas tentam roubar sua conta pedindo o código de verificação enviado por SMS.",
+    message:"Detectamos um acesso suspeito. Envie o código SMS recebido para validar sua conta.",
+    explanation:"Golpistas usam engenharia social para roubar sua conta do WhatsApp.",
     options:[
       {
-        text:"Enviar o código recebido",
+        text:"Enviar o código",
         correct:false
       },
       {
@@ -33,24 +33,22 @@ const scenarios = [
         correct:true
       },
       {
-        text:"Pedir mais informações ao golpista",
+        text:"Passar parcialmente o código",
         correct:false
       }
     ]
   },
 
   {
-    title:"Falso Familiar",
+    title:"Familiar pedindo Pix",
     avatar:"👤",
     sender:"Filho(a)",
     risk:"CRÍTICO",
-    message:
-      "Oi mãe, troquei de número. Preciso pagar uma conta urgente. Pode fazer um PIX pra mim?",
-    explanation:
-      "Criminosos usam fotos e nomes de familiares para pedir dinheiro.",
+    message:"Troquei de número. Preciso urgente de um Pix para pagar uma conta.",
+    explanation:"Criminosos usam fotos reais e criam urgência emocional.",
     options:[
       {
-        text:"Fazer o PIX rapidamente",
+        text:"Fazer o Pix imediatamente",
         correct:false
       },
       {
@@ -58,28 +56,26 @@ const scenarios = [
         correct:true
       },
       {
-        text:"Transferir apenas metade",
+        text:"Transferir metade do valor",
         correct:false
       }
     ]
   },
 
   {
-    title:"Promoção Falsa",
+    title:"Promoção falsa",
     avatar:"🎁",
-    sender:"Promoção Online",
+    sender:"Empresa famosa",
     risk:"MÉDIO",
-    message:
-      "Você ganhou um voucher de R$500! Clique no link para resgatar agora.",
-    explanation:
-      "Links falsos podem roubar dados pessoais e instalar malware.",
+    message:"Parabéns! Você ganhou um voucher de R$500. Clique no link.",
+    explanation:"Links falsos podem roubar seus dados pessoais.",
     options:[
       {
-        text:"Clicar no link",
+        text:"Clicar imediatamente",
         correct:false
       },
       {
-        text:"Verificar canais oficiais da empresa",
+        text:"Verificar no site oficial",
         correct:true
       },
       {
@@ -91,10 +87,37 @@ const scenarios = [
 ];
 
 const state = {
+  screen:"intro",
+  participant:null,
   step:0,
+  score:0,
   selected:null,
-  score:0
+  answers:[]
 };
+
+function render(){
+
+  if(location.hash === ADMIN_HASH){
+    renderAdmin();
+    return;
+  }
+
+  if(state.screen === "intro"){
+    renderIntro();
+  }
+
+  if(state.screen === "register"){
+    renderRegister();
+  }
+
+  if(state.screen === "scenario"){
+    renderScenario();
+  }
+
+  if(state.screen === "result"){
+    renderResult();
+  }
+}
 
 function renderIntro(){
 
@@ -120,17 +143,17 @@ function renderIntro(){
         </div>
 
         <h2 class="title">
-          Você conseguiria identificar um golpe digital?
+          Você saberia identificar um golpe digital?
         </h2>
 
         <p class="text">
-          Simulador interativo de engenharia social desenvolvido para conscientização sobre golpes digitais aplicados via WhatsApp.
+          Simulador interativo de engenharia social para conscientização sobre golpes digitais aplicados via WhatsApp.
         </p>
 
         <div class="card-grid">
 
           <div class="info-card">
-            <strong>💬 Simulações reais</strong>
+            <strong>💬 Simulações Reais</strong>
             <p class="text">
               Cenários inspirados em golpes reais.
             </p>
@@ -139,7 +162,7 @@ function renderIntro(){
           <div class="info-card">
             <strong>🧠 Engenharia Social</strong>
             <p class="text">
-              Aprenda técnicas utilizadas por criminosos.
+              Aprenda técnicas usadas por criminosos.
             </p>
           </div>
 
@@ -152,14 +175,13 @@ function renderIntro(){
 
         </div>
 
-        <button
-          class="btn btn-primary btn-block"
-          id="startBtn"
-          style="margin-top:28px;">
-
+        <button class="btn btn-primary btn-block" style="margin-top:24px;" onclick="startRegister()">
           Iniciar Simulação
-
         </button>
+
+        <p class="notice">
+          Projeto acadêmico educacional desenvolvido para conscientização digital.
+        </p>
 
       </section>
 
@@ -175,7 +197,7 @@ function renderIntro(){
 
             <div>
               <strong>WhatsApp Seguro</strong>
-              <p style="font-size:.85rem;opacity:.85;">
+              <p style="font-size:.85rem;">
                 Simulador Educacional
               </p>
             </div>
@@ -185,7 +207,8 @@ function renderIntro(){
           <div class="messages">
 
             <div class="bubble">
-              Olá 👋<br><br>
+              Olá 👋
+              <br><br>
               Este simulador apresentará situações reais de golpes digitais.
             </div>
 
@@ -204,10 +227,90 @@ function renderIntro(){
   </main>
 
   `;
+}
 
-  document
-    .getElementById("startBtn")
-    .addEventListener("click",renderScenario);
+function startRegister(){
+  state.screen = "register";
+  render();
+}
+
+function renderRegister(){
+
+  app.innerHTML = `
+  
+  <main class="page">
+
+    <section class="panel" style="max-width:700px;width:100%;">
+
+      <div class="logo">
+
+        <div class="logo-icon">
+          🛡️
+        </div>
+
+        <div>
+          <h1>Cadastro do Participante</h1>
+          <p>Preencha seus dados</p>
+        </div>
+
+      </div>
+
+      <div class="form-group">
+        <label>Nome</label>
+        <input type="text" id="name">
+      </div>
+
+      <div class="form-group">
+        <label>E-mail</label>
+        <input type="email" id="email">
+      </div>
+
+      <div class="form-group">
+        <label>Faixa Etária</label>
+
+        <select id="age">
+          <option value="">Selecione</option>
+          <option>18-25</option>
+          <option>26-40</option>
+          <option>41-60</option>
+          <option>60+</option>
+        </select>
+      </div>
+
+      <button class="btn btn-primary btn-block" onclick="startSimulation()">
+        Entrar no Simulador
+      </button>
+
+    </section>
+
+  </main>
+
+  `;
+}
+
+function startSimulation(){
+
+  const name = document.getElementById("name").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const age = document.getElementById("age").value;
+
+  if(!name || !email || !age){
+    alert("Preencha todos os campos.");
+    return;
+  }
+
+  state.participant = {
+    name,
+    email,
+    age
+  };
+
+  state.screen = "scenario";
+  state.step = 0;
+  state.score = 0;
+  state.answers = [];
+
+  render();
 }
 
 function renderScenario(){
@@ -230,9 +333,10 @@ function renderScenario(){
 
           <div>
             <strong>${sc.sender}</strong>
-            <div class="badge badge-danger">
+
+            <p style="font-size:.82rem;">
               Risco ${sc.risk}
-            </div>
+            </p>
           </div>
 
         </div>
@@ -252,7 +356,8 @@ function renderScenario(){
             <div
               class="option"
               onclick="selectOption(${index})"
-              id="option-${index}">
+              id="option-${index}"
+            >
 
               ${opt.text}
 
@@ -263,10 +368,9 @@ function renderScenario(){
           <button
             class="btn btn-primary btn-block"
             style="margin-top:10px;"
-            onclick="confirmOption()">
-
-            Confirmar Resposta
-
+            onclick="confirmOption()"
+          >
+            Confirmar
           </button>
 
         </div>
@@ -284,36 +388,32 @@ function selectOption(index){
 
   state.selected = index;
 
-  document
-    .querySelectorAll(".option")
-    .forEach(el => el.classList.remove("active"));
+  document.querySelectorAll(".option")
+    .forEach(el=>el.classList.remove("active"));
 
-  document
-    .getElementById(`option-${index}`)
+  document.getElementById(`option-${index}`)
     .classList.add("active");
 }
 
 async function confirmOption(){
 
   if(state.selected === null){
-
     alert("Selecione uma opção.");
     return;
   }
 
-  const scenario = scenarios[state.step];
-  const option = scenario.options[state.selected];
+  const sc = scenarios[state.step];
+  const option = sc.options[state.selected];
+
+  state.answers.push({
+    scenario:sc.title,
+    answer:option.text,
+    correct:option.correct
+  });
 
   if(option.correct){
     state.score++;
   }
-
-  await db.collection("resultados_simulacao").add({
-    scenario:scenario.title,
-    selected:option.text,
-    correct:option.correct,
-    createdAt:new Date().toISOString()
-  });
 
   alert(
     option.correct
@@ -326,65 +426,230 @@ async function confirmOption(){
   if(state.step < scenarios.length - 1){
 
     state.step++;
-    renderScenario();
+    render();
 
-  } else {
+  }else{
 
-    renderFinal();
+    await saveResult();
+    state.screen = "result";
+    render();
 
   }
 }
 
-function renderFinal(){
+async function saveResult(){
+
+  try{
+
+    await db.collection("resultados_simulacao").add({
+
+      participant:state.participant,
+      score:state.score,
+      total:scenarios.length,
+      answers:state.answers,
+      createdAt:new Date().toISOString()
+
+    });
+
+  }catch(error){
+
+    console.error(error);
+
+  }
+}
+
+function renderResult(){
 
   const percent = Math.round(
     (state.score / scenarios.length) * 100
   );
 
   app.innerHTML = `
-
+  
   <main class="page">
 
-    <div class="panel" style="max-width:700px;width:100%;">
+    <section class="panel result-card" style="max-width:700px;width:100%;">
 
-      <div class="logo">
+      <div class="logo" style="justify-content:center;">
 
         <div class="logo-icon">
           🛡️
         </div>
 
-        <div>
-          <h1>Simulação Finalizada</h1>
-          <p>Projeto Acadêmico Unicive</p>
+      </div>
+
+      <h2 class="title" style="font-size:2.2rem;">
+        Simulação Finalizada
+      </h2>
+
+      <div
+        class="result-score"
+        style="--percent:${percent}%"
+      >
+        <strong>${percent}%</strong>
+        <span>${state.score}/${scenarios.length} acertos</span>
+      </div>
+
+      <p class="text">
+        Obrigado por participar do projeto acadêmico de conscientização digital.
+      </p>
+
+      <button
+        class="btn btn-primary btn-block"
+        style="margin-top:20px;"
+        onclick="restartSimulation()"
+      >
+        Reiniciar
+      </button>
+
+    </section>
+
+  </main>
+
+  `;
+}
+
+function restartSimulation(){
+
+  state.screen = "intro";
+  state.step = 0;
+  state.score = 0;
+  state.selected = null;
+  state.answers = [];
+
+  render();
+}
+
+async function renderAdmin(){
+
+  const snapshot = await db
+    .collection("resultados_simulacao")
+    .orderBy("createdAt","desc")
+    .get();
+
+  let rows = "";
+
+  let total = 0;
+  let perfect = 0;
+  let avg = 0;
+
+  snapshot.forEach(doc=>{
+
+    const data = doc.data();
+
+    total++;
+
+    avg += data.score;
+
+    if(data.score === data.total){
+      perfect++;
+    }
+
+    rows += `
+    
+      <tr>
+
+        <td>${data.participant.name}</td>
+        <td>${data.participant.email}</td>
+        <td>${data.participant.age}</td>
+        <td>${data.score}/${data.total}</td>
+
+        <td>
+
+          <span class="badge ${
+            data.score === data.total
+              ? "badge-success"
+              : "badge-danger"
+          }">
+
+            ${
+              data.score === data.total
+                ? "Seguro"
+                : "Vulnerável"
+            }
+
+          </span>
+
+        </td>
+
+      </tr>
+
+    `;
+  });
+
+  avg = total > 0
+    ? (avg / total).toFixed(1)
+    : 0;
+
+  app.innerHTML = `
+  
+  <main class="page">
+
+    <div class="admin-wrapper">
+
+      <div class="admin-top">
+
+        <div class="logo">
+
+          <div class="logo-icon">
+            📊
+          </div>
+
+          <div>
+            <h1>Painel Administrativo</h1>
+            <p>Resultados da Simulação</p>
+          </div>
+
+        </div>
+
+        <button class="btn btn-danger" onclick="logoutAdmin()">
+          Sair
+        </button>
+
+      </div>
+
+      <div class="metric-grid">
+
+        <div class="metric">
+          <h3>${total}</h3>
+          <p>Total Participantes</p>
+        </div>
+
+        <div class="metric">
+          <h3>${perfect}</h3>
+          <p>Perfis Seguros</p>
+        </div>
+
+        <div class="metric">
+          <h3>${avg}</h3>
+          <p>Média Geral</p>
         </div>
 
       </div>
 
-      <div class="result-box">
+      <div class="table-wrap">
 
-        <h2>Resultado Final</h2>
+        <table class="table">
 
-        <p class="text">
-          Confira sua pontuação de segurança digital.
-        </p>
+          <thead>
 
-        <div
-          class="score"
-          style="--percent:${percent}%">
+            <tr>
+              <th>Nome</th>
+              <th>Email</th>
+              <th>Idade</th>
+              <th>Pontuação</th>
+              <th>Status</th>
+            </tr>
 
-          <strong>${percent}%</strong>
+          </thead>
 
-          <span>${state.score}/${scenarios.length} acertos</span>
+          <tbody>
 
-        </div>
+            ${rows}
 
-        <button
-          class="btn btn-primary btn-block"
-          onclick="restartSimulation()">
+          </tbody>
 
-          Reiniciar Simulação
-
-        </button>
+        </table>
 
       </div>
 
@@ -395,13 +660,14 @@ function renderFinal(){
   `;
 }
 
-function restartSimulation(){
+function logoutAdmin(){
 
-  state.step = 0;
-  state.score = 0;
-  state.selected = null;
+  location.hash = "";
+  state.screen = "intro";
 
-  renderIntro();
+  render();
 }
 
-renderIntro();
+window.addEventListener("hashchange",render);
+
+render();
