@@ -1,4 +1,11 @@
+const ACADEMIC_NOTICE =
+  "AVISO – CONTEXTO ACADÊMICO DO PROJETO. Este projeto é uma simulação online desenvolvida como parte da Atividade 2 da disciplina Atividades Extensionistas I – Desenvolvimento Sustentável, do curso de graduação em Segurança da Informação da Faculdade Unicive pelo aluno Douglas para conscientização sobre golpes online no WhatsApp.";
+
 const ADMIN_HASH = "#painel-resultados-unicive-douglas-2026";
+
+const ADMIN_USER = "vDFeeA7aSCagHSiND6Lf";
+
+const ADMIN_PASS = "ChfpMgoV8SKCMJQRWRW4";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCtuFBEHrxMPbaBLDOsXMbTeTkRKBhwc_4",
@@ -13,661 +20,679 @@ firebase.initializeApp(firebaseConfig);
 
 const db = firebase.firestore();
 
-const app = document.getElementById("app");
-
 const scenarios = [
   {
-    title:"Código de Verificação",
-    avatar:"🛠️",
-    sender:"Suporte WhatsApp",
-    risk:"ALTO",
-    message:"Detectamos um acesso suspeito. Envie o código SMS recebido para validar sua conta.",
-    explanation:"Golpistas usam engenharia social para roubar sua conta do WhatsApp.",
-    options:[
-      {
-        text:"Enviar o código",
-        correct:false
-      },
-      {
-        text:"Ignorar e ativar verificação em duas etapas",
-        correct:true
-      },
-      {
-        text:"Passar parcialmente o código",
-        correct:false
-      }
-    ]
-  },
+    id: "sim-swap",
+    category: "Conta e identidade",
+    title: "Sequestro de linha (SIM swap)",
+    contact: "Operadora Segura",
+    avatar: "OS",
 
-  {
-    title:"Familiar pedindo Pix",
-    avatar:"👤",
-    sender:"Filho(a)",
-    risk:"CRÍTICO",
-    message:"Troquei de número. Preciso urgente de um Pix para pagar uma conta.",
-    explanation:"Criminosos usam fotos reais e criam urgência emocional.",
-    options:[
+    messages: [
       {
-        text:"Fazer o Pix imediatamente",
-        correct:false
+        type: "text",
+        text: "Olá, identificamos uma tentativa de clonagem no seu número. Para bloquear o ataque, confirme seu CPF e o código que acabou de chegar por SMS."
       },
-      {
-        text:"Ligar para o número antigo e confirmar",
-        correct:true
-      },
-      {
-        text:"Transferir metade do valor",
-        correct:false
-      }
-    ]
-  },
 
-  {
-    title:"Promoção falsa",
-    avatar:"🎁",
-    sender:"Empresa famosa",
-    risk:"MÉDIO",
-    message:"Parabéns! Você ganhou um voucher de R$500. Clique no link.",
-    explanation:"Links falsos podem roubar seus dados pessoais.",
-    options:[
       {
-        text:"Clicar imediatamente",
-        correct:false
-      },
-      {
-        text:"Verificar no site oficial",
-        correct:true
-      },
-      {
-        text:"Compartilhar com amigos",
-        correct:false
+        type: "text",
+        text: "É urgente. Se não confirmar em 5 minutos sua linha será suspensa."
       }
+    ],
+
+    options: [
+      {
+        text: "Não envio código. Vou ligar para o número oficial da operadora.",
+        safe: true,
+        feedback:
+          "Boa decisão. Código SMS pode liberar troca de chip ou acesso à conta."
+      },
+
+      {
+        text: "Envio o código rapidamente para evitar o bloqueio.",
+        safe: false,
+        feedback:
+          "Risco alto. Golpistas usam urgência para capturar códigos."
+      },
+
+      {
+        text: "Peço para confirmar meu endereço primeiro.",
+        safe: false,
+        feedback:
+          "Ainda é perigoso. O correto é encerrar e procurar o canal oficial."
+      }
+    ],
+
+    explanation:
+      "No SIM swap, criminosos tentam transferir sua linha para outro chip.",
+
+    protect: [
+      "Nunca informe códigos SMS.",
+      "Use autenticação por aplicativo.",
+      "Ative PIN do chip."
     ]
   }
 ];
 
 const state = {
-  screen:"intro",
-  participant:null,
-  step:0,
-  score:0,
-  selected:null,
-  answers:[]
+  screen: "intro",
+  participant: null,
+  step: 0,
+  score: 0,
+  decisions: [],
+  selected: null,
+  adminAuthed: false,
+  adminSearch: "",
+  adminRisk: "all",
+  detailId: null
 };
 
-function render(){
+const app = document.getElementById("app");
 
-  if(location.hash === ADMIN_HASH){
-    renderAdmin();
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function normalize(value) {
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function isEmail(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
+}
+
+async function getResults() {
+  const snapshot = await db
+    .collection("results")
+    .orderBy("finishedAt", "desc")
+    .get();
+
+  return snapshot.docs.map((docItem) => ({
+    id: docItem.id,
+    ...docItem.data()
+  }));
+}
+
+async function saveResult(result) {
+  await db.collection("results").add(result);
+}
+
+function riskProfile(score) {
+  if (score >= 8) {
+    return {
+      label: "Baixo risco",
+      className: "good"
+    };
+  }
+
+  if (score >= 5) {
+    return {
+      label: "Risco moderado",
+      className: "warn"
+    };
+  }
+
+  return {
+    label: "Alto risco",
+    className: "bad"
+  };
+}
+
+function brand() {
+  return `
+    <div class="brand">
+      <div class="brand-mark">U</div>
+
+      <div>
+        <strong>Faculdade Unicive</strong>
+
+        <span>
+          Segurança da Informação • Atividades Extensionistas I
+        </span>
+      </div>
+    </div>
+  `;
+}
+
+function page(content) {
+  app.innerHTML = content;
+}
+
+async function render() {
+  if (location.hash === ADMIN_HASH || state.screen === "admin") {
+    state.screen = "admin";
+
+    await renderAdmin();
+
     return;
   }
 
-  if(state.screen === "intro"){
+  if (state.screen === "intro") {
     renderIntro();
-  }
-
-  if(state.screen === "register"){
+  } else if (state.screen === "register") {
     renderRegister();
-  }
-
-  if(state.screen === "scenario"){
+  } else if (state.screen === "scenario") {
     renderScenario();
-  }
-
-  if(state.screen === "result"){
-    renderResult();
+  } else if (state.screen === "final") {
+    renderFinal();
   }
 }
 
-function renderIntro(){
+function renderIntro() {
+  page(`
+    <main class="page">
 
-  app.innerHTML = `
-  
-  <main class="page">
+      <section class="layout">
 
-    <div class="container">
+        <div class="intro-panel">
 
-      <section class="panel">
+          ${brand()}
 
-        <div class="logo">
+          <p class="eyebrow">
+            Simulador web interativo
+          </p>
 
-          <div class="logo-icon">
-            🛡️
+          <h1>
+            Golpes digitais no WhatsApp
+          </h1>
+
+          <p class="lead">
+            Experiência educativa para conscientização sobre golpes online.
+          </p>
+
+          <div class="notice">
+            ${escapeHtml(ACADEMIC_NOTICE)}
           </div>
 
-          <div>
-            <h1>WhatsApp Seguro</h1>
-            <p>Projeto Acadêmico Unicive</p>
-          </div>
-
-        </div>
-
-        <h2 class="title">
-          Você saberia identificar um golpe digital?
-        </h2>
-
-        <p class="text">
-          Simulador interativo de engenharia social para conscientização sobre golpes digitais aplicados via WhatsApp.
-        </p>
-
-        <div class="card-grid">
-
-          <div class="info-card">
-            <strong>💬 Simulações Reais</strong>
-            <p class="text">
-              Cenários inspirados em golpes reais.
-            </p>
-          </div>
-
-          <div class="info-card">
-            <strong>🧠 Engenharia Social</strong>
-            <p class="text">
-              Aprenda técnicas usadas por criminosos.
-            </p>
-          </div>
-
-          <div class="info-card">
-            <strong>🔒 Segurança Digital</strong>
-            <p class="text">
-              Desenvolva percepção crítica.
-            </p>
+          <div class="btn-row">
+            <button class="btn" data-action="register">
+              Iniciar simulação
+            </button>
           </div>
 
         </div>
-
-        <button class="btn btn-primary btn-block" style="margin-top:24px;" onclick="startRegister()">
-          Iniciar Simulação
-        </button>
-
-        <p class="notice">
-          Projeto acadêmico educacional desenvolvido para conscientização digital.
-        </p>
 
       </section>
 
-      <div class="phone">
-
-        <div class="phone-screen">
-
-          <div class="chat-top">
-
-            <div class="avatar">
-              🛡️
-            </div>
-
-            <div>
-              <strong>WhatsApp Seguro</strong>
-              <p style="font-size:.85rem;">
-                Simulador Educacional
-              </p>
-            </div>
-
-          </div>
-
-          <div class="messages">
-
-            <div class="bubble">
-              Olá 👋
-              <br><br>
-              Este simulador apresentará situações reais de golpes digitais.
-            </div>
-
-            <div class="bubble">
-              Seu objetivo será identificar comportamentos suspeitos e tomar decisões seguras.
-            </div>
-
-          </div>
-
-        </div>
-
-      </div>
-
-    </div>
-
-  </main>
-
-  `;
+    </main>
+  `);
 }
 
-function startRegister(){
-  state.screen = "register";
-  render();
-}
+function renderRegister() {
+  page(`
+    <main class="page">
 
-function renderRegister(){
+      <section class="layout">
 
-  app.innerHTML = `
-  
-  <main class="page">
+        <div class="form-panel">
 
-    <section class="panel" style="max-width:700px;width:100%;">
+          ${brand()}
 
-      <div class="logo">
+          <h2>
+            Antes de começar
+          </h2>
 
-        <div class="logo-icon">
-          🛡️
-        </div>
+          <form id="registerForm">
 
-        <div>
-          <h1>Cadastro do Participante</h1>
-          <p>Preencha seus dados</p>
-        </div>
+            <div class="field">
 
-      </div>
+              <label>Nome completo</label>
 
-      <div class="form-group">
-        <label>Nome</label>
-        <input type="text" id="name">
-      </div>
+              <input
+                id="name"
+                placeholder="Digite seu nome"
+              />
 
-      <div class="form-group">
-        <label>E-mail</label>
-        <input type="email" id="email">
-      </div>
+            </div>
 
-      <div class="form-group">
-        <label>Faixa Etária</label>
+            <div class="field">
 
-        <select id="age">
-          <option value="">Selecione</option>
-          <option>18-25</option>
-          <option>26-40</option>
-          <option>41-60</option>
-          <option>60+</option>
-        </select>
-      </div>
+              <label>E-mail</label>
 
-      <button class="btn btn-primary btn-block" onclick="startSimulation()">
-        Entrar no Simulador
-      </button>
+              <input
+                id="email"
+                type="email"
+                placeholder="Digite seu e-mail"
+              />
 
-    </section>
+            </div>
 
-  </main>
+            <label class="consent">
 
-  `;
-}
+              <input id="consent" type="checkbox" />
 
-function startSimulation(){
+              <span>
+                Confirmo o contexto acadêmico.
+              </span>
 
-  const name = document.getElementById("name").value.trim();
-  const email = document.getElementById("email").value.trim();
-  const age = document.getElementById("age").value;
+            </label>
 
-  if(!name || !email || !age){
-    alert("Preencha todos os campos.");
-    return;
-  }
-
-  state.participant = {
-    name,
-    email,
-    age
-  };
-
-  state.screen = "scenario";
-  state.step = 0;
-  state.score = 0;
-  state.answers = [];
-
-  render();
-}
-
-function renderScenario(){
-
-  const sc = scenarios[state.step];
-
-  app.innerHTML = `
-  
-  <main class="page">
-
-    <div class="phone">
-
-      <div class="phone-screen">
-
-        <div class="chat-top">
-
-          <div class="avatar">
-            ${sc.avatar}
-          </div>
-
-          <div>
-            <strong>${sc.sender}</strong>
-
-            <p style="font-size:.82rem;">
-              Risco ${sc.risk}
+            <p id="formError" class="error">
+              Preencha corretamente.
             </p>
-          </div>
 
-        </div>
+            <div class="btn-row">
 
-        <div class="messages">
-
-          <div class="bubble">
-            ${sc.message}
-          </div>
-
-        </div>
-
-        <div class="options">
-
-          ${sc.options.map((opt,index)=>`
-
-            <div
-              class="option"
-              onclick="selectOption(${index})"
-              id="option-${index}"
-            >
-
-              ${opt.text}
+              <button class="btn" type="submit">
+                Começar
+              </button>
 
             </div>
 
-          `).join("")}
+          </form>
 
-          <button
-            class="btn btn-primary btn-block"
-            style="margin-top:10px;"
-            onclick="confirmOption()"
-          >
-            Confirmar
+        </div>
+
+      </section>
+
+    </main>
+  `);
+}
+
+function renderScenario() {
+  const scenario = scenarios[state.step];
+
+  page(`
+    <main class="page">
+
+      <section class="layout">
+
+        <div class="phone">
+
+          <div class="phone-screen">
+
+            <div class="chat-header">
+
+              <div class="avatar">
+                ${escapeHtml(scenario.avatar)}
+              </div>
+
+              <div class="chat-title">
+
+                <strong>
+                  ${escapeHtml(scenario.contact)}
+                </strong>
+
+              </div>
+
+            </div>
+
+            <div class="messages">
+
+              ${scenario.messages
+                .map(
+                  (message) => `
+                    <div class="bubble in">
+                      ${escapeHtml(message.text)}
+                    </div>
+                  `
+                )
+                .join("")}
+
+            </div>
+
+            <div class="choices">
+
+              ${scenario.options
+                .map(
+                  (option, index) => `
+                    <button
+                      class="option"
+                      data-choice="${index}"
+                    >
+                      ${escapeHtml(option.text)}
+                    </button>
+                  `
+                )
+                .join("")}
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+    </main>
+  `);
+}
+
+function renderFinal() {
+  const profile = riskProfile(state.score);
+
+  page(`
+    <main class="page">
+
+      <section class="final-panel">
+
+        ${brand()}
+
+        <h2>
+          Resultado Final
+        </h2>
+
+        <div class="score-ring">
+          ${state.score}/${scenarios.length}
+        </div>
+
+        <p>
+          <span class="pill ${profile.className}">
+            ${profile.label}
+          </span>
+        </p>
+
+        <div class="btn-row">
+
+          <button class="btn" data-action="restart">
+            Nova participação
           </button>
 
         </div>
 
-      </div>
+      </section>
 
-    </div>
-
-  </main>
-
-  `;
+    </main>
+  `);
 }
 
-function selectOption(index){
+async function renderAdmin() {
+  const results = await getResults();
 
-  state.selected = index;
+  const rows = results
+    .map((result) => {
+      const profile = riskProfile(result.score);
 
-  document.querySelectorAll(".option")
-    .forEach(el=>el.classList.remove("active"));
+      return `
+        <tr>
 
-  document.getElementById(`option-${index}`)
-    .classList.add("active");
+          <td>${escapeHtml(result.name)}</td>
+
+          <td>${escapeHtml(result.email)}</td>
+
+          <td>
+            ${result.score}/${result.total}
+          </td>
+
+          <td>
+            <span class="pill ${profile.className}">
+              ${profile.label}
+            </span>
+          </td>
+
+        </tr>
+      `;
+    })
+    .join("");
+
+  page(`
+    <main class="page admin-page">
+
+      <section class="admin-panel">
+
+        ${brand()}
+
+        <h2>
+          Painel de resultados
+        </h2>
+
+        ${
+          state.adminAuthed
+            ? `
+              <table>
+
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>E-mail</th>
+                    <th>Nota</th>
+                    <th>Perfil</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  ${rows}
+                </tbody>
+
+              </table>
+
+              <div class="btn-row">
+
+                <button class="btn" data-action="export">
+                  Exportar CSV
+                </button>
+
+                <button class="btn secondary" data-action="clear">
+                  Limpar dados
+                </button>
+
+              </div>
+            `
+            : `
+              <form id="adminLogin">
+
+                <div class="field">
+
+                  <label>Usuário</label>
+
+                  <input id="adminUser" />
+
+                </div>
+
+                <div class="field">
+
+                  <label>Senha</label>
+
+                  <input
+                    id="adminPass"
+                    type="password"
+                  />
+
+                </div>
+
+                <p id="adminError" class="error">
+                  Usuário ou senha inválidos.
+                </p>
+
+                <button class="btn" type="submit">
+                  Entrar
+                </button>
+
+              </form>
+            `
+        }
+
+      </section>
+
+    </main>
+  `);
 }
 
-async function confirmOption(){
+function choose(index) {
+  if (state.selected) return;
 
-  if(state.selected === null){
-    alert("Selecione uma opção.");
+  const scenario = scenarios[state.step];
+
+  const option = scenario.options[index];
+
+  state.selected = option;
+
+  if (option.safe) {
+    state.score += 1;
+  }
+
+  state.decisions.push({
+    scenario: scenario.title,
+    category: scenario.category,
+    choice: option.text,
+    safe: option.safe
+  });
+
+  nextScenario();
+}
+
+async function persistCurrentResult() {
+  if (!state.participant || state.saved) return;
+
+  await saveResult({
+    name: state.participant.name,
+    email: state.participant.email,
+    score: state.score,
+    total: scenarios.length,
+    riskProfile: riskProfile(state.score).label,
+    decisions: state.decisions,
+    finishedAt: new Date().toISOString()
+  });
+
+  state.saved = true;
+}
+
+async function nextScenario() {
+  if (state.step + 1 >= scenarios.length) {
+    await persistCurrentResult();
+
+    state.screen = "final";
+  } else {
+    state.step += 1;
+
+    state.selected = null;
+
+    state.screen = "scenario";
+  }
+
+  render();
+}
+
+function restart() {
+  state.screen = "register";
+
+  state.participant = null;
+
+  state.step = 0;
+
+  state.score = 0;
+
+  state.decisions = [];
+
+  state.selected = null;
+
+  state.saved = false;
+
+  render();
+}
+
+document.addEventListener("click", async (event) => {
+  const choice = event.target.closest("[data-choice]");
+
+  if (choice) {
+    choose(Number(choice.dataset.choice));
+
     return;
   }
 
-  const sc = scenarios[state.step];
-  const option = sc.options[state.selected];
+  const actionButton = event.target.closest("[data-action]");
 
-  state.answers.push({
-    scenario:sc.title,
-    answer:option.text,
-    correct:option.correct
-  });
+  if (!actionButton) return;
 
-  if(option.correct){
-    state.score++;
+  const action = actionButton.dataset.action;
+
+  if (action === "register") {
+    state.screen = "register";
   }
 
-  alert(
-    option.correct
-      ? "Resposta correta!"
-      : "Você caiu no golpe."
-  );
+  if (action === "restart") {
+    restart();
 
-  state.selected = null;
-
-  if(state.step < scenarios.length - 1){
-
-    state.step++;
-    render();
-
-  }else{
-
-    await saveResult();
-    state.screen = "result";
-    render();
-
+    return;
   }
-}
 
-async function saveResult(){
+  if (action === "clear") {
+    const snapshot = await db.collection("results").get();
 
-  try{
-
-    await db.collection("resultados_simulacao").add({
-
-      participant:state.participant,
-      score:state.score,
-      total:scenarios.length,
-      answers:state.answers,
-      createdAt:new Date().toISOString()
-
-    });
-
-  }catch(error){
-
-    console.error(error);
-
-  }
-}
-
-function renderResult(){
-
-  const percent = Math.round(
-    (state.score / scenarios.length) * 100
-  );
-
-  app.innerHTML = `
-  
-  <main class="page">
-
-    <section class="panel result-card" style="max-width:700px;width:100%;">
-
-      <div class="logo" style="justify-content:center;">
-
-        <div class="logo-icon">
-          🛡️
-        </div>
-
-      </div>
-
-      <h2 class="title" style="font-size:2.2rem;">
-        Simulação Finalizada
-      </h2>
-
-      <div
-        class="result-score"
-        style="--percent:${percent}%"
-      >
-        <strong>${percent}%</strong>
-        <span>${state.score}/${scenarios.length} acertos</span>
-      </div>
-
-      <p class="text">
-        Obrigado por participar do projeto acadêmico de conscientização digital.
-      </p>
-
-      <button
-        class="btn btn-primary btn-block"
-        style="margin-top:20px;"
-        onclick="restartSimulation()"
-      >
-        Reiniciar
-      </button>
-
-    </section>
-
-  </main>
-
-  `;
-}
-
-function restartSimulation(){
-
-  state.screen = "intro";
-  state.step = 0;
-  state.score = 0;
-  state.selected = null;
-  state.answers = [];
-
-  render();
-}
-
-async function renderAdmin(){
-
-  const snapshot = await db
-    .collection("resultados_simulacao")
-    .orderBy("createdAt","desc")
-    .get();
-
-  let rows = "";
-
-  let total = 0;
-  let perfect = 0;
-  let avg = 0;
-
-  snapshot.forEach(doc=>{
-
-    const data = doc.data();
-
-    total++;
-
-    avg += data.score;
-
-    if(data.score === data.total){
-      perfect++;
+    for (const item of snapshot.docs) {
+      await db.collection("results").doc(item.id).delete();
     }
 
-    rows += `
-    
-      <tr>
+    render();
 
-        <td>${data.participant.name}</td>
-        <td>${data.participant.email}</td>
-        <td>${data.participant.age}</td>
-        <td>${data.score}/${data.total}</td>
-
-        <td>
-
-          <span class="badge ${
-            data.score === data.total
-              ? "badge-success"
-              : "badge-danger"
-          }">
-
-            ${
-              data.score === data.total
-                ? "Seguro"
-                : "Vulnerável"
-            }
-
-          </span>
-
-        </td>
-
-      </tr>
-
-    `;
-  });
-
-  avg = total > 0
-    ? (avg / total).toFixed(1)
-    : 0;
-
-  app.innerHTML = `
-  
-  <main class="page">
-
-    <div class="admin-wrapper">
-
-      <div class="admin-top">
-
-        <div class="logo">
-
-          <div class="logo-icon">
-            📊
-          </div>
-
-          <div>
-            <h1>Painel Administrativo</h1>
-            <p>Resultados da Simulação</p>
-          </div>
-
-        </div>
-
-        <button class="btn btn-danger" onclick="logoutAdmin()">
-          Sair
-        </button>
-
-      </div>
-
-      <div class="metric-grid">
-
-        <div class="metric">
-          <h3>${total}</h3>
-          <p>Total Participantes</p>
-        </div>
-
-        <div class="metric">
-          <h3>${perfect}</h3>
-          <p>Perfis Seguros</p>
-        </div>
-
-        <div class="metric">
-          <h3>${avg}</h3>
-          <p>Média Geral</p>
-        </div>
-
-      </div>
-
-      <div class="table-wrap">
-
-        <table class="table">
-
-          <thead>
-
-            <tr>
-              <th>Nome</th>
-              <th>Email</th>
-              <th>Idade</th>
-              <th>Pontuação</th>
-              <th>Status</th>
-            </tr>
-
-          </thead>
-
-          <tbody>
-
-            ${rows}
-
-          </tbody>
-
-        </table>
-
-      </div>
-
-    </div>
-
-  </main>
-
-  `;
-}
-
-function logoutAdmin(){
-
-  location.hash = "";
-  state.screen = "intro";
+    return;
+  }
 
   render();
-}
+});
 
-window.addEventListener("hashchange",render);
+document.addEventListener("submit", async (event) => {
+  if (event.target.id === "registerForm") {
+    event.preventDefault();
+
+    const name = normalize(
+      document.getElementById("name").value
+    );
+
+    const email = normalize(
+      document.getElementById("email").value
+    ).toLowerCase();
+
+    const consent =
+      document.getElementById("consent").checked;
+
+    const error = document.getElementById("formError");
+
+    if (name.length < 5 || !isEmail(email) || !consent) {
+      error.classList.add("show");
+
+      return;
+    }
+
+    state.participant = {
+      name,
+      email
+    };
+
+    state.screen = "scenario";
+
+    render();
+  }
+
+  if (event.target.id === "adminLogin") {
+    event.preventDefault();
+
+    const user =
+      document.getElementById("adminUser").value;
+
+    const pass =
+      document.getElementById("adminPass").value;
+
+    const error =
+      document.getElementById("adminError");
+
+    if (user === ADMIN_USER && pass === ADMIN_PASS) {
+      state.adminAuthed = true;
+
+      render();
+    } else {
+      error.classList.add("show");
+    }
+  }
+});
+
+window.addEventListener("hashchange", () => {
+  if (location.hash === ADMIN_HASH) {
+    state.screen = "admin";
+  } else {
+    state.screen = "intro";
+  }
+
+  render();
+});
+
+if (location.hash === ADMIN_HASH) {
+  state.screen = "admin";
+}
 
 render();
