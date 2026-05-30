@@ -1,3 +1,29 @@
+// ─── Firebase ────────────────────────────────────────────────────────────────
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  query,
+  orderBy
+} from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCtuFBEHrxMPbaBLDOsXMbTeTkRKBhwc_4",
+  authDomain: "simulador-whatsapp-unicive.firebaseapp.com",
+  projectId: "simulador-whatsapp-unicive",
+  storageBucket: "simulador-whatsapp-unicive.firebasestorage.app",
+  messagingSenderId: "521362735071",
+  appId: "1:521362735071:web:f4d200dfcc1d27737dce6a",
+  measurementId: "G-WKWVJ1ZZTR"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
+const COLLECTION = "resultados";
+// ─────────────────────────────────────────────────────────────────────────────
+
 const ACADEMIC_NOTICE =
   "AVISO – CONTEXTO ACADÊMICO DO PROJETO. Este projeto é uma simulação online desenvolvida como parte da Atividade 2 da disciplina Atividades Extensionistas I – Desenvolvimento Sustentável, do curso de graduação em Segurança da Informação da Faculdade Unicive pelo aluno Douglas para conscientização sobre golpes online no WhatsApp.";
 
@@ -238,19 +264,25 @@ function ensureOptionOrder(scenario) {
   return state.optionOrder[state.step];
 }
 
-function getResults() {
+// Lê todos os resultados do Firestore (retorna uma Promise)
+async function getResults() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
+    const q = query(collection(db, COLLECTION), orderBy("finishedAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  } catch (err) {
+    console.error("Erro ao ler resultados do Firebase:", err);
     return [];
   }
 }
 
-function saveResult(result) {
-  const results = getResults();
-  results.push(result);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(results));
+// Salva um resultado no Firestore (retorna uma Promise)
+async function saveResult(result) {
+  try {
+    await addDoc(collection(db, COLLECTION), result);
+  } catch (err) {
+    console.error("Erro ao salvar resultado no Firebase:", err);
+  }
 }
 
 function setHashForScreen() {
@@ -259,11 +291,11 @@ function setHashForScreen() {
   }
 }
 
-function render() {
+async function render() {
   setHashForScreen();
   if (location.hash === ADMIN_HASH || state.screen === "admin") {
     state.screen = "admin";
-    renderAdmin();
+    await renderAdmin();
     return;
   }
 
@@ -542,7 +574,7 @@ function renderCategoryResults(decisions) {
     .join("");
 }
 
-function createExampleResult() {
+async function createExampleResult() {
   const decisions = scenarios.map((scenario, index) => {
     const safe = index % 4 !== 1;
     const option = safe ? scenario.options.find((item) => item.safe) : scenario.options.find((item) => !item.safe);
@@ -555,7 +587,7 @@ function createExampleResult() {
     };
   });
   const score = decisions.filter((item) => item.safe).length;
-  saveResult({
+  await saveResult({
     id: window.crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     name: "Participante Exemplo",
     email: "exemplo@unicive.local",
@@ -629,8 +661,10 @@ function renderFinal() {
   `);
 }
 
-function renderAdmin() {
-  const results = getResults();
+async function renderAdmin() {
+  // Mostra carregando enquanto busca do Firebase
+  app.innerHTML = `<main class="page"><section style="display:flex;align-items:center;justify-content:center;min-height:60vh;"><p style="color:var(--muted);font-size:1rem;">⏳ Carregando resultados…</p></section></main>`;
+  const results = await getResults();
   const totalParticipants = new Set(results.map((r) => `${r.email || ""}|${r.name || ""}`)).size;
   const finishedCount = results.length;
   const averageScore = finishedCount
@@ -668,7 +702,7 @@ function renderAdmin() {
           <div>
             <p class="eyebrow">Área restrita</p>
             <h2>Painel de resultados</h2>
-            <p class="lead">Registros armazenados localmente neste navegador, com exportação CSV para uso educacional.</p>
+            <p class="lead">Registros armazenados no Firebase e disponíveis para todos os dispositivos, com exportação CSV para uso educacional.</p>
           </div>
           <div class="btn-row">
             <button class="btn ghost" data-action="home">Voltar ao simulador</button>
@@ -723,7 +757,7 @@ function renderAdmin() {
               }`
             : `
               <form id="adminLogin" class="admin-login form-grid" novalidate>
-                <div class="notice">A proteção é local e adequada para publicação estática no GitHub Pages. Para uso institucional com múltiplos dispositivos, seria necessário um backend.</div>
+                <div class="notice">Os resultados são salvos no Firebase e ficam disponíveis em qualquer dispositivo. Acesso ao painel requer autenticação.</div>
                 <div class="field"><label for="adminUser">Usuário</label><input id="adminUser" autocomplete="username" /></div>
                 <div class="field"><label for="adminPass">Senha</label><input id="adminPass" type="password" autocomplete="current-password" /></div>
                 <p id="adminError" class="error">Usuário ou senha inválidos.</p>
@@ -751,21 +785,21 @@ function choose(index) {
   render();
 }
 
-function nextScenario() {
+async function nextScenario() {
   if (state.step + 1 >= scenarios.length) {
-    persistCurrentResult();
+    await persistCurrentResult();
     state.screen = "final";
   } else {
     state.step += 1;
     state.selected = null;
     state.screen = "scenario";
   }
-  render();
+  await render();
 }
 
-function persistCurrentResult() {
+async function persistCurrentResult() {
   if (!state.participant || state.saved) return;
-  saveResult({
+  await saveResult({
     id: window.crypto && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     name: state.participant.name,
     email: state.participant.email,
@@ -790,8 +824,8 @@ function restart() {
   render();
 }
 
-function exportCsv() {
-  const results = getResults();
+async function exportCsv() {
+  const results = await getResults();
   const headers = ["nome", "email", "nota", "total", "perfil", "data", "resumo_escolhas"];
   const lines = results.map((r) =>
     [
@@ -815,7 +849,7 @@ function exportCsv() {
   URL.revokeObjectURL(url);
 }
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const choice = event.target.closest("[data-choice]");
   if (choice) choose(Number(choice.dataset.choice));
 
@@ -826,7 +860,7 @@ document.addEventListener("click", (event) => {
   if (action === "register") state.screen = "register";
   if (action === "intro") state.screen = "intro";
   if (action === "explain") state.screen = "explain";
-  if (action === "next") return nextScenario();
+  if (action === "next") return await nextScenario();
   if (action === "restart") return restart();
   if (action === "admin") {
     location.hash = ADMIN_HASH.slice(1);
@@ -836,24 +870,23 @@ document.addEventListener("click", (event) => {
     state.screen = "intro";
     history.replaceState(null, "", location.pathname + location.search);
   }
-  if (action === "export") exportCsv();
+  if (action === "export") await exportCsv();
   if (action === "clear") {
-    if (confirm("Limpar todos os resultados armazenados neste navegador?")) {
-      localStorage.removeItem(STORAGE_KEY);
+    if (confirm("Atenção: esta ação só limpava dados locais. Os dados agora ficam no Firebase e devem ser removidos pelo console do Firebase.")) {
       state.detailId = null;
-      render();
+      await render();
     }
   }
   if (action === "demo") {
-    createExampleResult();
-    render();
+    await createExampleResult();
+    await render();
   }
   if (action === "details") {
     const id = actionButton.dataset.id;
     state.detailId = state.detailId === id ? null : id;
-    render();
+    await render();
   }
-  render();
+  await render();
 });
 
 document.addEventListener("input", (event) => {
@@ -872,7 +905,7 @@ document.addEventListener("change", (event) => {
   }
 });
 
-document.addEventListener("submit", (event) => {
+document.addEventListener("submit", async (event) => {
   if (event.target.id === "registerForm") {
     event.preventDefault();
     const name = normalize(document.getElementById("name").value);
@@ -893,7 +926,7 @@ document.addEventListener("submit", (event) => {
     state.selected = null;
     state.optionOrder = [];
     state.saved = false;
-    render();
+    await render();
   }
 
   if (event.target.id === "adminLogin") {
@@ -911,14 +944,14 @@ document.addEventListener("submit", (event) => {
   }
 });
 
-window.addEventListener("hashchange", () => {
+window.addEventListener("hashchange", async () => {
   if (location.hash === ADMIN_HASH) {
     state.screen = "admin";
   } else if (state.screen === "admin") {
     state.screen = "intro";
   }
-  render();
+  await render();
 });
 
 if (location.hash === ADMIN_HASH) state.screen = "admin";
-render();
+render(); // chamada inicial (async, mas não precisamos awaitar no topo)
